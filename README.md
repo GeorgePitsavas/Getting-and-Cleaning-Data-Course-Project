@@ -15,4 +15,4 @@ Uses descriptive activity names to name the activities in the data set
 From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
 
 FinalData.txt 
-is the exported final data .
+is the exported tidy_Data_final .
