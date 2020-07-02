@@ -1,66 +1,72 @@
+#libraries
 library(dplyr)
-filename <- "Coursera_DS3_Final.zip"
+library(reshape2)
 
-# Checking if archieve already exists.
-if (!file.exists(filename)){
-  fileURL <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
-  download.file(fileURL, filename, method="curl")
-}  
+#get data via internet
+Data_Raw <- "./Data_Raw"
+Data_Raw_Url <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+Data_Raw_file <-"Data_Raw.zip"
+Data_Raw_final <-paste(Data_Raw, "/", "Data.zip", sep = "")
+Data <-"./data"
 
-# Checking if folder exists
-if (!file.exists("UCI HAR Dataset")) { 
-  unzip(filename) 
+if (!file.exists(Data_Raw)) {
+  dir.create(Data_Raw)
+  download.file(url = Data_Raw_Url, destfile = Data_Raw_final)
+}
+if (!file.exists(Data)) {
+  dir.create(Data)
+  unzip(zipfile = Data_Raw_final, exdir = Data)
 }
 
-
-#read tables and creating the main variables
-
-features <- read.table("UCI HAR Dataset/features.txt", col.names = c("n","functions"))
-activities <- read.table("UCI HAR Dataset/activity_labels.txt", col.names = c("code", "activity"))
-subject_test <- read.table("UCI HAR Dataset/test/subject_test.txt", col.names = "subject")
-x_test <- read.table("UCI HAR Dataset/test/X_test.txt", col.names = features$functions)
-y_test <- read.table("UCI HAR Dataset/test/y_test.txt", col.names = "code")
-subject_train <- read.table("UCI HAR Dataset/train/subject_train.txt", col.names = "subject")
-x_train <- read.table("UCI HAR Dataset/train/X_train.txt", col.names = features$functions)
-y_train <- read.table("UCI HAR Dataset/train/y_train.txt", col.names = "code")
+#train data
+X_train <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/train/X_train.txt"))
+Y_train <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/train/Y_train.txt"))
+Subject_train <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/train/subject_train.txt"))
 
 
+# test data
+X_test <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/test/X_test.txt"))
+Y_test <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/test/Y_test.txt"))
+Subject_test <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/test/subject_test.txt"))
 
 
-X <- rbind(x_train, x_test)
-Y <- rbind(y_train, y_test)
-
-Subject <- rbind(subject_train, subject_test)
-
-
-#merged Data
-Merged_Data <- cbind(Subject, Y, X)
-
-#tidy data preparation
-
-TidyData <- Merged_Data %>% select(subject, code, contains("mean"), contains("std"))
-TidyData$code <- activities[TidyData$code, 2]
-
-names(TidyData)[2] = "activity"
-names(TidyData)<-gsub("Acc", "Accelerometer", names(TidyData))
-names(TidyData)<-gsub("Gyro", "Gyroscope", names(TidyData))
-names(TidyData)<-gsub("BodyBody", "Body", names(TidyData))
-names(TidyData)<-gsub("Mag", "Magnitude", names(TidyData))
-names(TidyData)<-gsub("^t", "Time", names(TidyData))
-names(TidyData)<-gsub("^f", "Frequency", names(TidyData))
-names(TidyData)<-gsub("tBody", "TimeBody", names(TidyData))
-names(TidyData)<-gsub("-mean()", "Mean", names(TidyData), ignore.case = TRUE)
-names(TidyData)<-gsub("-std()", "STD", names(TidyData), ignore.case = TRUE)
-names(TidyData)<-gsub("-freq()", "Frequency", names(TidyData), ignore.case = TRUE)
-names(TidyData)<-gsub("angle", "Angle", names(TidyData))
-names(TidyData)<-gsub("gravity", "Gravity", names(TidyData))
+#merge the train and test set
+X_data <- rbind(X_train, X_test)
+Y_data <- rbind(Y_train, Y_test)
+Subject_data <-rbind(Subject_train,Subject_test)
 
 
-#final step
-FinalData <- TidyData %>%
-  group_by(subject, activity) %>%
-  summarise_all(funs(mean))
-write.table(FinalData, "FinalData.txt", row.name=FALSE)
+
+#load activities  info and features
+Feature <- read.table(paste(sep = "", Data, "/UCI HAR Dataset/features.txt"))
+Activities <-read.table(paste(sep = "", Data, "/UCI HAR Dataset/activity_labels.txt"))
+
+# extract feature cols & names named 'mean, std'
+selectedCols <- grep("-(mean|std).*", as.character(Feature[,2]))
+selectedColNames <- Feature[selectedCols, 2]
+selectedColNames <- gsub("-mean", "Mean", selectedColNames)
+selectedColNames <- gsub("-std", "Std", selectedColNames)
+selectedColNames <- gsub("[-()]", "", selectedColNames)
+
+# using descriptive name
+x_data <- X_data[selectedCols]
+allData <- cbind(Subject_data, Y_data, X_data)
+
+colnames(allData) <- c("Subject", "Activity", selectedColNames)
 
 
-FinalData
+allData$Activity <- factor(allData$Activity, levels = Activities[,1], labels = Activities[,2])
+allData$Subject <- as.factor(allData$Subject)
+
+
+
+#tidy data
+
+melted_Data <- melt(allData, id = c("Subject", "Activity"))
+tidy_Data_final <- dcast(melted_Data, Subject + Activity ~ variable, mean)
+
+
+# tidy data final version as text 
+write.table(tidy_Data_final, "FinalData.txt", row.name=FALSE)
+
+
